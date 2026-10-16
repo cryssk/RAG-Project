@@ -64,53 +64,6 @@ Para revogar o acesso, volte em https://myaccount.google.com/apppasswords e excl
 4. Abra a conversa com o seu bot e envie qualquer mensagem (ex.: `oi`). O bot só consegue escrever para quem falou com ele antes.
 5. Acesse no navegador `https://api.telegram.org/bot<SEU_TOKEN>/getUpdates` e procure `"chat":{"id": ...}`. Esse número é o `TELEGRAM_CHAT_ID`.
 
-## Configuração (`.env`)
-
-Crie o arquivo `.env` na raiz do repositório (`RAG - Project/.env`):
-
-```
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Gmail
-GMAIL_USER=seu-email@gmail.com
-GMAIL_APP_PASSWORD=abcdefghijklmnop
-
-# Só para o 03_email_agent.py: remetente cujo último e-mail será respondido
-TARGET_SENDER=alguem@exemplo.com
-
-# Telegram
-TELEGRAM_BOT_TOKEN=123456789:ABC...
-TELEGRAM_CHAT_ID=123456789
-```
-
-O `.env` está no `.gitignore`. Nunca faça commit do token do bot nem da senha de app: com eles, qualquer pessoa lê seus e-mails ou fala pelo seu bot.
-
-## Como rodar
-
-```bash
-cd "Project Human in the loop"
-
-# Testa sem enviar nada: mostra no terminal a mensagem que iria para o Telegram
-python 05_daily_email_agent_tlg.py --teste
-
-# Resume e envia o último período encerrado
-python 05_daily_email_agent_tlg.py
-
-# Resume um período específico de um dia
-python 05_daily_email_agent_tlg.py --periodo manha --data 2026-10-15
-
-# Fica rodando e envia automaticamente ao fim de cada período
-python 05_daily_email_agent_tlg.py --agendar
-```
-
-No modo `--agendar`, a janela do terminal precisa ficar aberta. O resumo sai 1 minuto depois do fim de cada período, para incluir e-mails que chegaram no último minuto.
-
-## Custo
-
-- Usa o `claude-haiku-4-5`, o Claude mais barato. O Sonnet só entra se o Haiku falhar.
-- No máximo 50 e-mails por período e 1.500 caracteres por e-mail são enviados ao modelo (`MAX_EMAILS` e `MAX_CARACTERES_POR_EMAIL`).
-- Se não houver e-mails não lidos no período, o modelo não é chamado (custo zero).
-- A API de Bots do Telegram é gratuita.
 
 ## Segurança
 
