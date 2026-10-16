@@ -1,48 +1,72 @@
-# RAG - Project
+# Project Human in the loop
 
-Exemplos de agentes com **LangChain** e **LangGraph** usando o modelo **Claude Haiku 4.5** da Anthropic.
+Agentes com **LangChain** e **LangGraph** que leem o Gmail, resumem os e-mails com o **Claude** e enviam o resultado pelo **Telegram**, com a opção de **Human in the Loop**: você aprova, edita ou rejeita a ação antes de ela ser executada.
+
+O projeto foi construído em etapas. Cada script apresenta um middleware do LangChain, e o último junta todos eles em um agente completo.
 
 ## Scripts
 
 | Arquivo | O que faz |
 |---|---|
-| `FirstAgent.py` | Agente simples que responde perguntas de turismo (ex.: "Qual é a capital da França?"). |
-| `AgentReceitas.py` | Agente "chef pessoal": busca receitas na web com a Tavily e devolve uma lista estruturada (nome, ingredientes, modo de preparo). |
-| `CondicionalEdges.py` | Grafo LangGraph que classifica feedbacks de clientes e usa uma **aresta condicional** para enviá-los à equipe certa (Engenharia, Marketing ou Suporte). |
+| `01_sumarization.py` | `SummarizationMiddleware`: resume conversas longas (com prompt em português) para economizar tokens. |
+| `02_fallback.py` | `ModelFallbackMiddleware`: se o modelo principal falhar, um modelo reserva responde. |
+| `03_email_agent.py` | `HumanInTheLoopMiddleware`: o agente lê o último e-mail de um remetente, escreve uma resposta e **pausa** para você aprovar, editar ou rejeitar antes de enviá-la por SMTP. |
+| `04_daily_email_agent_wapp.py` | Versão do resumo diário que envia pelo WhatsApp (CallMeBot). |
+| `05_daily_email_agent_tlg.py` | **Agente principal.** Resume os e-mails não lidos de cada período do dia (manhã, tarde e noite) e envia o resumo pelo **Telegram**. |
+
+## Como funciona o agente do Telegram (`05`)
+
+1. Lê pelo **IMAP** do Gmail os e-mails não lidos que chegaram no período. A caixa é aberta em modo somente leitura, então nenhum e-mail é marcado como lido.
+2. O **Claude Haiku 4.5** escreve uma linha por e-mail (`• resumo — remetente`). Se ele falhar, o **Claude Sonnet 5.5** assume (fallback).
+3. O agente chama a ferramenta `enviar_resumo`, que manda o texto para o seu chat pela **API de Bots do Telegram** (`sendMessage`). Mensagens acima de 4.000 caracteres são divididas em partes.
+4. Com `APROVAR_ANTES_DE_ENVIAR = True`, o envio pausa e mostra o rascunho no terminal para você aprovar, editar ou rejeitar (Human in the Loop).
+
+Os horários, os cabeçalhos das mensagens e os limites de custo ficam no bloco **CONFIGURAÇÃO** no início do arquivo.
+
+### Por que Telegram?
+
+A API de Bots do Telegram é gratuita, oficial e não exige número de telefone comercial nem serviço intermediário. Basta um token e o ID do chat para enviar mensagens com uma requisição HTTP simples.
 
 ## Requisitos
 
 - Python 3.10 ou mais recente
 - Uma chave da API da Anthropic: https://platform.claude.com/settings/keys
-- Uma chave da Tavily, só para o `AgentReceitas.py`: https://tavily.com
+- Uma conta Gmail com **verificação em duas etapas** e uma **senha de app** (veja abaixo)
+- Um bot do Telegram (veja abaixo)
 
 ## Instalação
 
 ```bash
-pip install python-dotenv pydantic langchain langgraph langchain-anthropic langchain-tavily
+pip install python-dotenv requests langchain langgraph langchain-anthropic
 ```
 
-## Configuração
+## Passo a passo: senha de app do Gmail
 
-Crie um arquivo `.env` na raiz do projeto:
+O Google não aceita a sua senha normal em programas que usam IMAP/SMTP. É preciso gerar uma **senha de app**, uma senha de 16 letras que dá acesso só ao e-mail e pode ser revogada a qualquer momento.
 
-```
-ANTHROPIC_API_KEY=sk-ant-...
-TAVILY_API_KEY=tvly-...
-```
+1. Acesse https://myaccount.google.com e entre na conta que o agente vai ler.
+2. Vá em **Segurança** e ative a **Verificação em duas etapas**. Sem ela, a opção de senha de app não aparece.
+3. Abra https://myaccount.google.com/apppasswords (ou pesquise "Senhas de app" na barra de busca da conta).
+4. Digite um nome para o app, por exemplo `Agente de e-mails`, e clique em **Criar**.
+5. Copie a senha de 16 letras que aparece. Ela só é mostrada uma vez.
+6. Coloque a senha no `.env` em `GMAIL_APP_PASSWORD`. Os espaços podem ser removidos.
+7. Confira se o IMAP está ativo no Gmail: **Configurações (engrenagem) → Ver todas as configurações → Encaminhamento e POP/IMAP → Ativar IMAP**. Nas contas novas ele já vem ativo.
 
-O `.env` está no `.gitignore` e não é enviado para o repositório. Nunca faça commit das suas chaves.
+> Contas de trabalho ou escola (Google Workspace) podem ter a senha de app bloqueada pelo administrador. Nesse caso, use uma conta pessoal ou peça a liberação.
 
-## Como rodar
+Para revogar o acesso, volte em https://myaccount.google.com/apppasswords e exclua a senha.
 
-```bash
-python FirstAgent.py
-python AgentReceitas.py
-python CondicionalEdges.py
-```
+## Passo a passo: bot do Telegram
 
-## Custo
+1. No Telegram, abra uma conversa com o **@BotFather**.
+2. Envie `/newbot`, escolha um nome e um usuário para o bot (o usuário precisa terminar em `bot`).
+3. O BotFather responde com o **token** do bot (formato `123456789:ABC...`). Coloque-o em `TELEGRAM_BOT_TOKEN`.
+4. Abra a conversa com o seu bot e envie qualquer mensagem (ex.: `oi`). O bot só consegue escrever para quem falou com ele antes.
+5. Acesse no navegador `https://api.telegram.org/bot<SEU_TOKEN>/getUpdates` e procure `"chat":{"id": ...}`. Esse número é o `TELEGRAM_CHAT_ID`.
 
-Todos os scripts usam o `claude-haiku-4-5`, o modelo mais barato da Anthropic (US$ 1 por milhão de tokens de entrada e US$ 5 por milhão de saída). Cada script define um `max_tokens` para limitar o tamanho das respostas e o gasto.
 
-O `AgentReceitas.py` custa mais por execução que os outros, porque os resultados da busca na web entram no contexto do modelo.
+## Segurança
+
+- O agente só **lê** o Gmail (modo somente leitura) e só envia mensagens para o seu chat.
+- O prompt manda o modelo ignorar instruções escritas dentro dos e-mails, para reduzir o risco de *prompt injection*.
+- Se o envio ao Telegram falhar, a mensagem de erro não mostra a URL, que contém o token do bot.
