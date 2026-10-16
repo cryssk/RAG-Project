@@ -1,72 +1,72 @@
 # Project Human in the loop
 
-Agentes com **LangChain** e **LangGraph** que leem o Gmail, resumem os e-mails com o **Claude** e enviam o resultado pelo **Telegram**, com a opção de **Human in the Loop**: você aprova, edita ou rejeita a ação antes de ela ser executada.
+Agents built with **LangChain** and **LangGraph** that read Gmail, summarize the emails with **Claude**, and send the result via **Telegram**, with an optional **Human in the Loop** step: you approve, edit, or reject the action before it runs.
 
-O projeto foi construído em etapas. Cada script apresenta um middleware do LangChain, e o último junta todos eles em um agente completo.
+The project was built in stages. Each script introduces one LangChain middleware, and the last one combines all of them into a complete agent.
 
 ## Scripts
 
-| Arquivo | O que faz |
+| File | What it does |
 |---|---|
-| `01_sumarization.py` | `SummarizationMiddleware`: resume conversas longas (com prompt em português) para economizar tokens. |
-| `02_fallback.py` | `ModelFallbackMiddleware`: se o modelo principal falhar, um modelo reserva responde. |
-| `03_email_agent.py` | `HumanInTheLoopMiddleware`: o agente lê o último e-mail de um remetente, escreve uma resposta e **pausa** para você aprovar, editar ou rejeitar antes de enviá-la por SMTP. |
-| `04_daily_email_agent_wapp.py` | Versão do resumo diário que envia pelo WhatsApp (CallMeBot). |
-| `05_daily_email_agent_tlg.py` | **Agente principal.** Resume os e-mails não lidos de cada período do dia (manhã, tarde e noite) e envia o resumo pelo **Telegram**. |
+| `01_sumarization.py` | `SummarizationMiddleware`: summarizes long conversations (with a Portuguese prompt) to save tokens. |
+| `02_fallback.py` | `ModelFallbackMiddleware`: if the main model fails, a backup model responds. |
+| `03_email_agent.py` | `HumanInTheLoopMiddleware`: the agent reads the latest email from a sender, writes a reply, and **pauses** so you can approve, edit, or reject it before it is sent via SMTP. |
+| `04_daily_email_agent_wapp.py` | Version of the daily summary that sends via WhatsApp (CallMeBot). |
+| `05_daily_email_agent_tlg.py` | **Main agent.** Summarizes the unread emails from each period of the day (morning, afternoon, and evening) and sends the summary via **Telegram**. |
 
-## Como funciona o agente do Telegram (`05`)
+## How the Telegram agent (`05`) works
 
-1. Lê pelo **IMAP** do Gmail os e-mails não lidos que chegaram no período. A caixa é aberta em modo somente leitura, então nenhum e-mail é marcado como lido.
-2. O **Claude Haiku 4.5** escreve uma linha por e-mail (`• resumo — remetente`). Se ele falhar, o **Claude Sonnet 5.5** assume (fallback).
-3. O agente chama a ferramenta `enviar_resumo`, que manda o texto para o seu chat pela **API de Bots do Telegram** (`sendMessage`). Mensagens acima de 4.000 caracteres são divididas em partes.
-4. Com `APROVAR_ANTES_DE_ENVIAR = True`, o envio pausa e mostra o rascunho no terminal para você aprovar, editar ou rejeitar (Human in the Loop).
+1. It reads the unread emails received during the period through Gmail **IMAP**. The mailbox is opened in read-only mode, so no email is marked as read.
+2. **Claude Haiku 4.5** writes one line per email (`• summary — sender`). If it fails, **Claude Sonnet 5.5** takes over (fallback).
+3. The agent calls the `enviar_resumo` tool, which sends the text to your chat through the **Telegram Bot API** (`sendMessage`). Messages longer than 4,000 characters are split into parts.
+4. With `APROVAR_ANTES_DE_ENVIAR = True`, sending pauses and shows the draft in the terminal so you can approve, edit, or reject it (Human in the Loop).
 
-Os horários, os cabeçalhos das mensagens e os limites de custo ficam no bloco **CONFIGURAÇÃO** no início do arquivo.
+The schedules, message headers, and cost limits are in the **CONFIGURAÇÃO** block at the top of the file.
 
-### Por que Telegram?
+### Why Telegram?
 
-A API de Bots do Telegram é gratuita, oficial e não exige número de telefone comercial nem serviço intermediário. Basta um token e o ID do chat para enviar mensagens com uma requisição HTTP simples.
+The Telegram Bot API is free, official, and doesn't require a business phone number or a third-party service. All you need is a token and the chat ID to send messages with a simple HTTP request.
 
-## Requisitos
+## Requirements
 
-- Python 3.10 ou mais recente
-- Uma chave da API da Anthropic: https://platform.claude.com/settings/keys
-- Uma conta Gmail com **verificação em duas etapas** e uma **senha de app** (veja abaixo)
-- Um bot do Telegram (veja abaixo)
+- Python 3.10 or newer
+- An Anthropic API key: https://platform.claude.com/settings/keys
+- A Gmail account with **2-Step Verification** and an **app password** (see below)
+- A Telegram bot (see below)
 
-## Instalação
+## Installation
 
 ```bash
 pip install python-dotenv requests langchain langgraph langchain-anthropic
 ```
 
-## Passo a passo: senha de app do Gmail
+## Step by step: Gmail app password
 
-O Google não aceita a sua senha normal em programas que usam IMAP/SMTP. É preciso gerar uma **senha de app**, uma senha de 16 letras que dá acesso só ao e-mail e pode ser revogada a qualquer momento.
+Google doesn't accept your regular password in programs that use IMAP/SMTP. You need to generate an **app password**, a 16-letter password that grants access only to email and can be revoked at any time.
 
-1. Acesse https://myaccount.google.com e entre na conta que o agente vai ler.
-2. Vá em **Segurança** e ative a **Verificação em duas etapas**. Sem ela, a opção de senha de app não aparece.
-3. Abra https://myaccount.google.com/apppasswords (ou pesquise "Senhas de app" na barra de busca da conta).
-4. Digite um nome para o app, por exemplo `Agente de e-mails`, e clique em **Criar**.
-5. Copie a senha de 16 letras que aparece. Ela só é mostrada uma vez.
-6. Coloque a senha no `.env` em `GMAIL_APP_PASSWORD`. Os espaços podem ser removidos.
-7. Confira se o IMAP está ativo no Gmail: **Configurações (engrenagem) → Ver todas as configurações → Encaminhamento e POP/IMAP → Ativar IMAP**. Nas contas novas ele já vem ativo.
+1. Go to https://myaccount.google.com and sign in to the account the agent will read.
+2. Go to **Security** and turn on **2-Step Verification**. Without it, the app password option doesn't appear.
+3. Open https://myaccount.google.com/apppasswords (or search for "App passwords" in the account search bar).
+4. Enter a name for the app, for example `Email agent`, and click **Create**.
+5. Copy the 16-letter password that appears. It is shown only once.
+6. Put the password in `.env` as `GMAIL_APP_PASSWORD`. The spaces can be removed.
+7. Make sure IMAP is enabled in Gmail: **Settings (gear) → See all settings → Forwarding and POP/IMAP → Enable IMAP**. It is already enabled on new accounts.
 
-> Contas de trabalho ou escola (Google Workspace) podem ter a senha de app bloqueada pelo administrador. Nesse caso, use uma conta pessoal ou peça a liberação.
+> Work or school accounts (Google Workspace) may have app passwords blocked by the administrator. In that case, use a personal account or ask for access.
 
-Para revogar o acesso, volte em https://myaccount.google.com/apppasswords e exclua a senha.
+To revoke access, go back to https://myaccount.google.com/apppasswords and delete the password.
 
-## Passo a passo: bot do Telegram
+## Step by step: Telegram bot
 
-1. No Telegram, abra uma conversa com o **@BotFather**.
-2. Envie `/newbot`, escolha um nome e um usuário para o bot (o usuário precisa terminar em `bot`).
-3. O BotFather responde com o **token** do bot (formato `123456789:ABC...`). Coloque-o em `TELEGRAM_BOT_TOKEN`.
-4. Abra a conversa com o seu bot e envie qualquer mensagem (ex.: `oi`). O bot só consegue escrever para quem falou com ele antes.
-5. Acesse no navegador `https://api.telegram.org/bot<SEU_TOKEN>/getUpdates` e procure `"chat":{"id": ...}`. Esse número é o `TELEGRAM_CHAT_ID`.
+1. In Telegram, open a chat with **@BotFather**.
+2. Send `/newbot` and choose a name and a username for the bot (the username must end in `bot`).
+3. BotFather replies with the bot's **token** (format `123456789:ABC...`). Put it in `TELEGRAM_BOT_TOKEN`.
+4. Open the chat with your bot and send any message (e.g. `hi`). The bot can only message people who have messaged it first.
+5. Open `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in your browser and look for `"chat":{"id": ...}`. That number is the `TELEGRAM_CHAT_ID`.
 
 
-## Segurança
+## Security
 
-- O agente só **lê** o Gmail (modo somente leitura) e só envia mensagens para o seu chat.
-- O prompt manda o modelo ignorar instruções escritas dentro dos e-mails, para reduzir o risco de *prompt injection*.
-- Se o envio ao Telegram falhar, a mensagem de erro não mostra a URL, que contém o token do bot.
+- The agent only **reads** Gmail (read-only mode) and only sends messages to your chat.
+- The prompt tells the model to ignore instructions written inside the emails, to reduce the risk of *prompt injection*.
+- If sending to Telegram fails, the error message doesn't show the URL, which contains the bot token.
